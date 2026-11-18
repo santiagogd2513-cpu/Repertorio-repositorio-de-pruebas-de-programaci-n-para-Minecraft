@@ -4,15 +4,12 @@ import com.mojang.blaze3d.audio.Channel;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.openal.ALC;
+import org.lwjgl.openal.AL11;
 import org.lwjgl.openal.EXTEfx;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Optional OpenAL EFX bridge. It runs on Minecraft's sound-engine thread from
- * Channel.play(), so effects are attached to the actual OpenAL source rather
- * than merely calculated in a detached DSP helper.
- */
+/** Attaches OpenAL EFX to the real Minecraft source on the sound-engine thread. */
 public final class OpenAlAcoustics {
     private static final Logger LOGGER = LogManager.getLogger("BDAcousticEngine/EFX");
     private static final AtomicBoolean WARNED = new AtomicBoolean();
@@ -45,7 +42,7 @@ public final class OpenAlAcoustics {
         }
         if (reverbEffect == 0 || reverbSlot == 0) createReverb();
         if (reverbSlot != 0) {
-            EXTEfx.alSource3i(source, EXTEfx.AL_AUXILIARY_SEND_FILTER, reverbSlot, 0, 0);
+            AL11.alSource3i(source, EXTEfx.AL_AUXILIARY_SEND_FILTER, reverbSlot, 0, EXTEfx.AL_FILTER_NULL);
         }
     }
 
@@ -79,7 +76,7 @@ public final class OpenAlAcoustics {
         }
     }
 
-    /** The OpenAL context is about to be destroyed; its effect IDs must never be reused. */
+    /** The OpenAL context is about to be destroyed; old effect IDs must not be reused. */
     public static synchronized void onContextClosing() {
         reverbEffect = 0;
         reverbSlot = 0;
