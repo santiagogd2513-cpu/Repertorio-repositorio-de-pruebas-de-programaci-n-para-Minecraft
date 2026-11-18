@@ -2,26 +2,28 @@
 
 Independent acoustic-engine addon for Minecraft Java 1.20.1 / Forge 47.4.5 / Java 17. It is designed for a later integration with Beautiful Decor. This repository neither modifies nor bundles the original Beautiful Decor mod.
 
-## Phase 1 implementation
+## Phase 1 and Phase 2 implementation
 
 - Forge bootstrap, client config and a reusable API for other mods to submit sound position, velocity and environmental conditions.
 - Client integration for positional SoundInstance objects. It applies modelled material/atmospheric gain and listener-motion Doppler pitch while preserving the original sound, coordinates, attenuation mode, stream provider, and loop/tick behavior.
 - Moving TickableSoundInstance objects are re-evaluated as their coordinates change. Source velocity is estimated from bounded position history; listener velocity is read from the local player.
 - Multi-ray voxel-world probes estimate blocked paths, material transmission, diffraction around obstructions, scattering, reflections and a frequency-dependent low-pass target.
+- The voxel tracer now has a bounded, same-tick cache for repeated co-located sound events. Cache entries are keyed by world, tick, endpoints, ray budget and fluid mode, and old entries are pruned.
 - Six octave-band material tables for absorption, transmission and scattering, with basic block-name classification for common stone, wood, glass, foliage, soil, soft and metal blocks.
-- Outdoor atmospheric loss with temperature, humidity and pressure inputs, plus wind projected along the source-listener path. Vanilla hook defaults to standard conditions; adapters may supply local conditions.
+- Outdoor atmospheric loss with temperature, humidity and pressure inputs, plus wind projected along the path. Vanilla hook defaults to standard conditions; adapters may supply local conditions.
 - Air/water sound-speed and boundary-impedance estimates, including distinct same-medium and crossing-medium travel-time paths.
-- Room RT60 estimation from volume, surface area and average absorption, plus bounded rectangular-room modal resonance frequencies.
+- Room RT60 estimation from volume, surface area and average absorption, plus bounded rectangular-room modal resonance frequencies. Invalid/non-finite geometry inputs are sanitized.
 - Two-path coherent interference and knife-edge diffraction estimates, exposed through the adapter API.
 - Stereo-pan/interaural-delay estimate and an independent aerodynamic-flow noise estimate for adapters. These are estimates, not a full HRTF or fluid simulation.
 - Chunk-safe streaming DSP API with stateful low/high-pass filters, smoothed gain, bounded delay and feedback reverb. Stream state is isolated by stream ID and automatically bounded.
-- Unit tests for propagation math, material coefficient ranges, hydroacoustic boundaries, spatial pan, airflow, motion tracking, room modes, constructive/destructive interference and chunk-boundary independence.
+- Motion tracking rejects non-finite samples and keeps a bounded source history.
+- Regression tests cover propagation math, material coefficient ranges, hydroacoustic boundaries, spatial pan, airflow, motion tracking (including invalid samples), room estimates (including invalid inputs), room modes, constructive/destructive interference, diffraction, chunk-boundary independence and bounded stream states.
 
 ## Runtime behavior and integration boundary
 
 The standard client hook applies **additional acoustic gain and Doppler pitch** to positional Minecraft sounds. It deliberately leaves Minecraft's native distance rolloff, panning, decoding and final mixer in control. Custom AudioStream providers are delegated to unchanged, and tickable instances remain tickable.
 
-The streaming DSP is exposed through AcousticApi.processStream(...) for an integration that owns decoded PCM blocks. It is **not** injected into every internal vanilla decoder/mixer buffer by this addon. The model returns a travel-time estimate, but the hook does not schedule sounds using that estimate: SoundInstance.getDelay() is preserved because Minecraft uses it for repeat scheduling. The default vanilla integration does not yet synthesize a full room impulse response or separately rendered reflection taps.
+The streaming DSP is exposed through AcousticApi.processStream(...) for an integration that owns decoded PCM blocks. It is **not** injected into every internal vanilla decoder/mixer buffer by this addon. The model returns a travel-time estimate, but the hook does not schedule sounds using that estimate: SoundInstance.getDelay() is preserved because Minecraft uses it for repeat scheduling. The default vanilla integration does not synthesize a full room impulse response or separately rendered reflection taps.
 
 All Minecraft block/position distances are treated as metres (one block approximately one metre). Material coefficients, diffraction and transmission values are engineering approximations for game materials, not laboratory measurements. For an air/water crossing without an exact interface location, the travel-time estimator uses an even path split. The stereo helper is a pan approximation rather than a measured HRTF. The room modes and interference utilities are design estimates, not a full wave-field solver. Aerodynamic output is an estimate for a separate airflow source; it does not replace engine/exhaust sound sources.
 
@@ -33,8 +35,12 @@ The original Beautiful Decor source stays untouched. Its maintainers can later a
 
 ## Build and verification
 
-Requirements: JDK 17 and Gradle 8.1+.
+Requirements: JDK 17 and Gradle 8.1.1+.
 
     gradle --no-daemon clean build
 
-The GitHub Actions workflow builds on pushes, pull requests and manual dispatch. It runs the Gradle build task (including tests) and uploads the source plus compiled JAR artifact. It does not publish a GitHub Release.
+GitHub Actions runs the complete Gradle build (including tests), validates the generated JAR archive, uploads the standalone mod JAR as `BD-Acoustic-Engine-JAR`, and also uploads a source/build bundle as `BD-Acoustic-Engine-latest`. It does not publish a GitHub Release.
+
+## Runtime validation still required
+
+Automated compilation and unit tests cannot verify the acoustic feel in a live Minecraft world. In-game validation remains necessary for the planned supermarket, tunnel, bridge, open-air, river/shore and airplane fly-away scenarios. The engine has not been represented as gameplay-tested until those scenarios are run in Minecraft and their observations/logs are reviewed.
