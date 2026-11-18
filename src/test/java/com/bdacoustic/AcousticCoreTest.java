@@ -2,6 +2,8 @@ package com.bdacoustic;
 
 import com.bdacoustic.audio.StreamingDsp;
 import com.bdacoustic.physics.AcousticMath;
+import com.bdacoustic.physics.AtmosphericModel;
+import com.bdacoustic.physics.RoomAcoustics;
 import org.junit.jupiter.api.Test;
 import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
@@ -16,6 +18,15 @@ class AcousticCoreTest {
     @Test void dopplerRatioRemainsBounded() {
         assertTrue(AcousticMath.dopplerRatio(500, 0, 343.2) <= 2.0);
         assertTrue(AcousticMath.dopplerRatio(-500, 0, 343.2) >= 0.5);
+    }
+    @Test void atmosphericAbsorptionNeverAmplifies() {
+        double gain = AtmosphericModel.atmosphericGain(1500, 4, 20, 50);
+        assertTrue(gain > 0.0 && gain <= 1.0);
+    }
+    @Test void roomEstimateIsFiniteAndBounded() {
+        RoomAcoustics.Estimate estimate = RoomAcoustics.estimate(120, 180, 0.25);
+        assertTrue(estimate.rt60Seconds() >= 0.05 && estimate.rt60Seconds() <= 12.0);
+        assertTrue(Double.isFinite(estimate.equivalentAbsorptionArea()));
     }
     @Test void streamingFilterRetainsStateBetweenChunks() {
         StreamingDsp dsp = new StreamingDsp();
