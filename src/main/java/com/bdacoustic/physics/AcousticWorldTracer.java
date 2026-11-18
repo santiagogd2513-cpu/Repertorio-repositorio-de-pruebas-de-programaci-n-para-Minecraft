@@ -20,8 +20,8 @@ public final class AcousticWorldTracer {
             return size() > MAX_CACHE_ENTRIES;
         }
     };
-    private record CacheKey(Level level, long gameTime, int sx, int sy, int sz,
-                            int lx, int ly, int lz, int rays, boolean includeFluids) {}
+    private record CacheKey(Level level, long gameTime, long sx, long sy, long sz,
+                            long lx, long ly, long lz, int rays, boolean includeFluids) {}
     private record CachedTrace(long gameTime, Trace trace) {}
 
     private AcousticWorldTracer() {}
@@ -38,8 +38,8 @@ public final class AcousticWorldTracer {
         int count = Math.max(1, Math.min(64, rays));
         long gameTime = level.getGameTime();
         CacheKey key = new CacheKey(level, gameTime,
-                quantize(from.x), quantize(from.y), quantize(from.z),
-                quantize(to.x), quantize(to.y), quantize(to.z), count, includeFluids);
+                coordinateBits(from.x), coordinateBits(from.y), coordinateBits(from.z),
+                coordinateBits(to.x), coordinateBits(to.y), coordinateBits(to.z), count, includeFluids);
         synchronized (CACHE) {
             CachedTrace cached = CACHE.get(key);
             if (cached != null && cached.gameTime() == gameTime) return cached.trace();
@@ -87,9 +87,8 @@ public final class AcousticWorldTracer {
         return result;
     }
 
-    private static int quantize(double coordinate) {
-        if (!Double.isFinite(coordinate)) return 0;
-        return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, Math.floor(coordinate * 4.0)));
+    private static long coordinateBits(double coordinate) {
+        return Double.doubleToLongBits(Double.isFinite(coordinate) ? coordinate : 0.0);
     }
 
     private static AcousticMaterial materialFor(BlockState state) {
