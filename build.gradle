@@ -29,6 +29,14 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
 }
 test { useJUnitPlatform() }
+sourceSets.main.resources.srcDir "$buildDir/generated/mixin"
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += [
+        "-AoutRefMapFile=$buildDir/generated/mixin/bdacoustic.refmap.json",
+        "-AdefaultObfuscationEnv=searge"
+    ]
+    doFirst { file("$buildDir/generated/mixin").mkdirs() }
+}
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.release = 17
