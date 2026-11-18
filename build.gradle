@@ -1,11 +1,26 @@
+buildscript {
+    repositories {
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+    }
+}
+
 plugins {
     id 'eclipse'
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
 }
+apply plugin: 'org.spongepowered.mixin'
+
+mixin {
+    add sourceSets.main, 'bdacoustic.refmap.json'
+}
+
 group = 'com.bdacoustic'
-version = '1.0.0-alpha.1'
+version = '1.0.0-alpha.2'
 base { archivesName = 'BD-Acoustic-Engine' }
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 minecraft {
@@ -24,9 +39,13 @@ minecraft {
 repositories { mavenCentral() }
 dependencies {
     minecraft 'net.minecraftforge:forge:1.20.1-47.4.5'
+    compileOnly 'org.spongepowered:mixin:0.8.5'
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
 }
 test { useJUnitPlatform() }
+tasks.withType(JavaCompile).configureEach {
+}
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.release = 17
@@ -38,7 +57,8 @@ jar {
             'Specification-Vendor': 'BD Acoustic Engine',
             'Specification-Version': project.version,
             'Implementation-Title': project.name,
-            'Implementation-Version': project.version
+            'Implementation-Version': project.version,
+            'MixinConfigs': 'bdacoustic.mixins.json'
         ])
     }
 }

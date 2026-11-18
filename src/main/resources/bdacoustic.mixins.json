@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.bdacoustic.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "client": [
+    "ChannelAccessor",
+    "ChannelMixin",
+    "LibraryMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "refmap": "bdacoustic.refmap.json"
+}
