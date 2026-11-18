@@ -6,11 +6,24 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
-/** Multi-ray voxel-world probe. Material values are empirical game approximations, not measured block data. */
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/** Multi-ray voxel-world probe with a tiny same-tick cache for co-located sound events. */
 public final class AcousticWorldTracer {
     public record Trace(double obstruction, int blocked, int reflections, double lowPassHz,
                         boolean underwater, double diffraction, double transmission,
                         double scattering, double meanAbsorption) {}
+    private static final int MAX_CACHE_ENTRIES = 128;
+    private static final Map<CacheKey, CachedTrace> CACHE = new LinkedHashMap<>(32, 0.75f, true) {
+        @Override protected boolean removeEldestEntry(Map.Entry<CacheKey, CachedTrace> eldest) {
+            return size() > MAX_CACHE_ENTRIES;
+        }
+    };
+    private record CacheKey(Level level, long gameTime, int sx, int sy, int sz,
+                            int lx, int ly, int lz, int rays, boolean includeFluids) {}
+    private record CachedTrace(long gameTime, Trace trace) {}
+
     private AcousticWorldTracer() {}
 
     public static Trace trace(Level level, Vec3 from, Vec3 to, int rays) {
@@ -19,7 +32,19 @@ public final class AcousticWorldTracer {
 
     /** includeFluids=false when both endpoints are underwater, so the medium itself is not treated as a wall. */
     public static Trace trace(Level level, Vec3 from, Vec3 to, int rays, boolean includeFluids) {
+        if (level == null || from == null || to == null) {
+            return new Trace(1.0, 0, 0, 20000.0, false, 1.0, 1.0, 0.0, 0.0);
+        }
         int count = Math.max(1, Math.min(64, rays));
+        long gameTime = level.getGameTime();
+        CacheKey key = new CacheKey(level, gameTime,
+                quantize(from.x), quantize(from.y), quantize(from.z),
+                quantize(to.x), quantize(to.y), quantize(to.z), count, includeFluids);
+        synchronized (CACHE) {
+            CachedTrace cached = CACHE.get(key);
+            if (cached != null && cached.gameTime() == gameTime) return cached.trace();
+        }
+
         int blocked = 0;
         int reflections = 0;
         int waterHits = 0;
@@ -53,8 +78,18 @@ public final class AcousticWorldTracer {
         double diffraction = blocked == 0 ? 1.0 : clamp(0.30 + 0.25 * (1.0 - blockedRatio), 0.30, 0.55);
         double transmission = blocked == 0 ? 1.0 : clamp(0.45 + avgMaterialTransmission * 0.55, 0.45, 0.98);
         double cutoff = Math.max(550.0, 19000.0 * (1.0 - blockedRatio * (0.82 + avgAbsorption * 0.12)));
-        return new Trace(obstruction, blocked, reflections, cutoff, waterHits > 0,
+        Trace result = new Trace(obstruction, blocked, reflections, cutoff, waterHits > 0,
                 diffraction, transmission, avgScattering, avgAbsorption);
+        synchronized (CACHE) {
+            CACHE.put(key, new CachedTrace(gameTime, result));
+            CACHE.entrySet().removeIf(entry -> entry.getValue().gameTime() < gameTime - 1);
+        }
+        return result;
+    }
+
+    private static int quantize(double coordinate) {
+        if (!Double.isFinite(coordinate)) return 0;
+        return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, Math.floor(coordinate * 4.0)));
     }
 
     private static AcousticMaterial materialFor(BlockState state) {
