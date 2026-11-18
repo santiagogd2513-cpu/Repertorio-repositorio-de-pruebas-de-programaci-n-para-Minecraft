@@ -31,7 +31,8 @@ public final class ClientSoundHook {
         if (distance > AcousticConfig.MAX_DISTANCE.get()) return;
         AcousticResult result = AcousticEngine.evaluate(mc.level,
                 new net.minecraft.world.phys.Vec3(sound.getX(), sound.getY(), sound.getZ()),
-                mc.player.position(), 20.0, 50.0, 0.0, 0.0, AcousticConfig.MAX_RAYS.get());
+                mc.player.position(), 20.0, 50.0, 0.0, 0.0,
+                Math.max(4, (int) Math.round(AcousticConfig.MAX_RAYS.get() * AcousticConfig.QUALITY.get())));
         // The vanilla SoundEngine still owns final mixing and playback. This hook exposes
         // evaluated physics without replacing or double-processing the original sound.
         if (LOGGER.isDebugEnabled()) LOGGER.debug("Sound {}: d={}m delay={}s gain={} cutoff={}Hz",
