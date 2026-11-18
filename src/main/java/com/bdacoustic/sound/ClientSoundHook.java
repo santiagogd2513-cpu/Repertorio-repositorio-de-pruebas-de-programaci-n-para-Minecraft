@@ -18,11 +18,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.UUID;
 
-/**
- * Decorates every sound submitted through Forge's PlaySoundEvent. Relative/UI/music
- * sounds are still wrapped (with neutral propagation), while world sounds receive
- * the voxel/atmospheric calculation.
- */
+/** Routes every Forge PlaySoundEvent through the engine; relative sounds keep neutral spatial propagation. */
 @Mod.EventBusSubscriber(modid = "bdacoustic", value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class ClientSoundHook {
     private static final Logger LOGGER = LogManager.getLogger("BDAcousticEngine");
@@ -39,7 +35,8 @@ public final class ClientSoundHook {
         if (sound == null || sound instanceof AcousticSoundInstance) return;
 
         Minecraft mc = Minecraft.getInstance();
-        boolean spatial = !sound.isRelative() && sound.getAttenuation() != SoundInstance.Attenuation.NONE;
+        // Attenuation.NONE disables vanilla distance rolloff, not acoustic wall transmission.
+        boolean spatial = !sound.isRelative();
         boolean canEvaluate = spatial && mc.level != null && mc.player != null;
         UUID trackingId = canEvaluate && sound instanceof TickableSoundInstance ? UUID.randomUUID() : null;
         AcousticResult result = canEvaluate ? evaluate(mc, sound, trackingId) : NEUTRAL;
