@@ -1,9 +1,24 @@
+buildscript {
+    repositories {
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+    }
+}
+
 plugins {
     id 'eclipse'
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
 }
+apply plugin: 'org.spongepowered.mixin'
+
+mixin {
+    add sourceSets.main, 'bdacoustic.refmap.json'
+}
+
 group = 'com.bdacoustic'
 version = '1.0.0-alpha.2'
 base { archivesName = 'BD-Acoustic-Engine' }
@@ -29,13 +44,7 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
 }
 test { useJUnitPlatform() }
-sourceSets.main.resources.srcDir "$buildDir/generated/mixin"
 tasks.withType(JavaCompile).configureEach {
-    options.compilerArgs += [
-        "-AoutRefMapFile=$buildDir/generated/mixin/bdacoustic.refmap.json",
-        "-AdefaultObfuscationEnv=searge"
-    ]
-    doFirst { file("$buildDir/generated/mixin").mkdirs() }
 }
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
