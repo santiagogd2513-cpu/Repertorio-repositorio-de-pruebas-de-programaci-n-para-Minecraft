@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          build_file="$(find . -maxdepth 4 -type f \\( -name build.gradle -o -name build.gradle.kts \\) -not -path '*/.gradle/*' | sort | head -n 1 || true)"
+          build_file="$(find . -maxdepth 4 -type f \( -name build.gradle -o -name build.gradle.kts \) -not -path '*/.gradle/*' | sort | head -n 1 || true)"
 
           if [ -z "$build_file" ]; then
             echo "status=source-only" >> "$GITHUB_OUTPUT"
@@ -71,7 +71,7 @@ jobs:
 
           git archive --format=tar HEAD | tar -xf - -C artifact-package/source
 
-          find . -type f -path '*/build/libs/*.jar' -not -path './artifact-package/*' -exec cp {} artifact-package/compiled/ \\; || true
+          find . -type f -path '*/build/libs/*.jar' -not -path './artifact-package/*' -exec cp {} artifact-package/compiled/ \; || true
 
           {
             echo "Project: BD Acoustic Engine"
