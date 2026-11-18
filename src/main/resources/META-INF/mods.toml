@@ -1,0 +1,26 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+[[mods]]
+modId="bdacoustic"
+version="${file.jarVersion}"
+displayName="BD Acoustic Engine"
+description='''Independent acoustic simulation engine and integration API for Minecraft Forge.'''
+[[dependencies.bdacoustic]]
+modId="forge"
+mandatory=true
+versionRange="[47.4.5,)"
+ordering="NONE"
+side="BOTH"
+[[dependencies.bdacoustic]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.20.2)"
+ordering="NONE"
+side="BOTH"
+[[dependencies.bdacoustic]]
+modId="beautifuldecor"
+mandatory=false
+versionRange="[0,)"
+ordering="AFTER"
+side="BOTH"
