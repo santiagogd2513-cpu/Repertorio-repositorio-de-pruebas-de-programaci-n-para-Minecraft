@@ -13,7 +13,7 @@ public final class AcousticEngine {
                 || level.getFluidState(net.minecraft.core.BlockPos.containing(listener)).is(net.minecraft.tags.FluidTags.WATER);
         double speed = water ? 1480.0 : AcousticMath.speedOfSound(temperatureC, humidity);
         AcousticWorldTracer.Trace trace = AcousticWorldTracer.trace(level, source, listener, rayBudget);
-        double air = AcousticMath.inverseDistanceGain(distance);
+        double air = AcousticMath.inverseDistanceGain(distance) * AtmosphericModel.atmosphericGain(distance, 3, temperatureC, humidity);
         if (water) air *= 0.72;
         return new AcousticResult(distance, AcousticMath.travelTime(distance, speed), air,
                 trace.obstruction(), trace.lowPassHz(), AcousticMath.dopplerRatio(sourceRadialVelocity,
