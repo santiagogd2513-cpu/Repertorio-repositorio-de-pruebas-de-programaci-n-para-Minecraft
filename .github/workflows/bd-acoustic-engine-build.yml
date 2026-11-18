@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build:
-    name: Compile and package source
+    name: Compile, test and package
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
@@ -35,7 +35,7 @@ jobs:
         with:
           gradle-version: "8.1.1"
 
-      - name: Compile mod when Gradle project is present
+      - name: Compile and run the full verification suite
         id: compile
         shell: bash
         run: |
@@ -43,23 +43,29 @@ jobs:
           build_file="$(find . -maxdepth 4 -type f \( -name build.gradle -o -name build.gradle.kts \) -not -path '*/.gradle/*' | sort | head -n 1 || true)"
 
           if [ -z "$build_file" ]; then
-            echo "status=source-only" >> "$GITHUB_OUTPUT"
-            echo "::notice::No Gradle build file exists yet. The source snapshot will still be archived; compilation will activate when the project files are added."
-            exit 0
+            echo "::error::Gradle build file not found."
+            exit 1
           fi
 
           project_dir="$(dirname "$build_file")"
           if [ -f "$project_dir/gradlew" ]; then
             chmod +x "$project_dir/gradlew"
             (cd "$project_dir" && ./gradlew --no-daemon clean build)
-          elif [ -f "$project_dir/gradlew.bat" ]; then
-            echo "::error::A Windows Gradle wrapper was found, but this workflow runs on Linux. Add the Unix gradlew wrapper to enable compilation."
-            exit 1
           else
             gradle --no-daemon -p "$project_dir" clean build
           fi
 
-          echo "status=compiled" >> "$GITHUB_OUTPUT"
+          jar_count="$(find "$project_dir/build/libs" -maxdepth 1 -type f -name '*.jar' | wc -l)"
+          if [ "$jar_count" -lt 1 ]; then
+            echo "::error::Build completed without producing a mod JAR."
+            exit 1
+          fi
+
+          while IFS= read -r jar_file; do
+            unzip -t "$jar_file"
+          done < <(find "$project_dir/build/libs" -maxdepth 1 -type f -name '*.jar' | sort)
+
+          echo "status=compiled-and-tested" >> "$GITHUB_OUTPUT"
 
       - name: Package source and compiled outputs
         if: always()
@@ -70,7 +76,6 @@ jobs:
           mkdir -p artifact-package/source artifact-package/compiled
 
           git archive --format=tar HEAD | tar -xf - -C artifact-package/source
-
           find . -type f -path '*/build/libs/*.jar' -not -path './artifact-package/*' -exec cp {} artifact-package/compiled/ \; || true
 
           {
@@ -87,7 +92,16 @@ jobs:
           cd artifact-package
           zip -qr ../BD-Acoustic-Engine-source-and-build.zip .
 
-      - name: Upload latest source and build artifact
+      - name: Upload standalone mod JAR
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BD-Acoustic-Engine-JAR
+          path: build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload source and verification bundle
         if: always()
         uses: actions/upload-artifact@v4
         with:
