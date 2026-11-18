@@ -5,7 +5,9 @@ license="MIT"
 modId="bdacoustic"
 version="${file.jarVersion}"
 displayName="BD Acoustic Engine"
-description='''Independent acoustic simulation engine and integration API for Minecraft Forge.'''
+description='''Independent acoustic simulation engine and OpenAL EFX integration for Minecraft Forge.'''
+[[mixins]]
+config="bdacoustic.mixins.json"
 [[dependencies.bdacoustic]]
 modId="forge"
 mandatory=true
