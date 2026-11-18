@@ -1,21 +1,39 @@
 # BD Acoustic Engine
 
-Independent acoustic-engine addon for Minecraft Java 1.20.1 / Forge 47.4.5 / Java 17. It is designed to be integrated with Beautiful Decor later; this repository does not modify or bundle Beautiful Decor.
+Independent acoustic-engine addon for Minecraft Java 1.20.1 / Forge 47.4.5 / Java 17. It is designed for a later integration with Beautiful Decor. This repository neither modifies nor bundles the original Beautiful Decor mod.
 
-## Included in this Phase 1 foundation
-- Forge mod bootstrap and client configuration.
-- A reusable acoustic API for other mods to submit positional sources and velocity.
-- Distance attenuation estimate, temperature/humidity speed-of-sound estimate, travel-time estimate and Doppler ratio.
-- Multi-ray block-path probing with approximate material absorption, obstruction, reflection count and frequency-dependent low-pass estimate.
-- Air/water medium selection with a separate underwater sound-speed approximation.
-- Stateful chunk-safe low-pass DSP utility with bounded per-stream state.
-- Client sound-event observation hook. It evaluates positional sounds while leaving Minecraft's vanilla mixer in control to avoid duplicate playback or unsafe replacement of third-party streams.
+## Phase 1 implementation
 
-## Important implementation boundary
-The first-phase hook currently **observes and evaluates** sound events; it does not yet inject delayed playback, apply the computed gain/filter to Minecraft's final mixer, or synthesize reflection taps. The DSP class is an integration-ready processing primitive, not yet wired into the game's internal streaming buffers. True wave diffraction/interference, room impulse response convolution, moving-source history, wind-field simulation, and physically complete underwater boundary refraction remain future implementation work.
+- Forge bootstrap, client config and a reusable API for other mods to submit sound position, velocity and environmental conditions.
+- Client integration for positional SoundInstance objects. It applies modelled material/atmospheric gain and listener-motion Doppler pitch while preserving the original sound, coordinates, attenuation mode, stream provider, and loop/tick behavior.
+- Moving TickableSoundInstance objects are re-evaluated as their coordinates change. Source velocity is estimated from bounded position history; listener velocity is read from the local player.
+- Multi-ray voxel-world probes estimate blocked paths, material transmission, diffraction around obstructions, scattering, reflections and a frequency-dependent low-pass target.
+- Six octave-band material tables for absorption, transmission and scattering, with basic block-name classification for common stone, wood, glass, foliage, soil, soft and metal blocks.
+- Outdoor atmospheric loss with temperature, humidity and pressure inputs, plus wind projected along the source-listener path. Vanilla hook defaults to standard conditions; adapters may supply local conditions.
+- Air/water sound-speed and boundary-impedance estimates, including distinct same-medium and crossing-medium travel-time paths.
+- Room RT60 estimation from volume, surface area and average absorption.
+- Stereo-pan/interaural-delay estimate and an independent aerodynamic-flow noise estimate for adapters. These are estimates, not a full HRTF or fluid simulation.
+- Chunk-safe streaming DSP API with stateful low/high-pass filters, smoothed gain, bounded delay and feedback reverb. Stream state is isolated by stream ID and automatically bounded.
+- Unit tests for core math, material coefficient ranges, hydroacoustic boundaries, spatial pan, airflow, motion tracking, room estimates and chunk-boundary independence.
 
-## Build
-Run with JDK 17 and Gradle 8.1+:
-`gradle --no-daemon clean build`
+## Runtime behavior and integration boundary
 
-GitHub Actions builds on pushes and uploads a source/build artifact. The workflow does not publish Releases.
+The standard client hook applies **additional acoustic gain and Doppler pitch** to positional Minecraft sounds. It deliberately leaves Minecraft's native distance rolloff, panning, decoding and final mixer in control. Custom AudioStream providers are delegated to unchanged, and tickable instances remain tickable.
+
+The streaming DSP is exposed through AcousticApi.processStream(...) for an integration that owns decoded PCM blocks. It is **not** injected into every internal vanilla decoder/mixer buffer by this addon. The model returns a travel-time estimate, but the hook does not schedule sounds using that estimate: SoundInstance.getDelay() is preserved because Minecraft uses it for repeat scheduling. The default vanilla integration does not yet synthesize reflection taps or room convolution.
+
+All Minecraft block/position distances are treated as metres (one block approximately one metre). Material coefficients and diffraction/transmission values are engineering approximations for game materials, not laboratory measurements. For an air/water crossing without an exact interface location, the travel-time estimator uses an even path split. The stereo helper is a pan approximation rather than a measured HRTF. Aerodynamic output is an estimate for a separate airflow source; it does not replace engine/exhaust sound sources.
+
+## Third-party adapter outline
+
+Implement AcousticSource to provide a stable source ID, position, velocity and environmental values. Use AcousticApi.evaluate(...) for propagation, AcousticApi.estimateRoom(...) for room data, AcousticApi.estimateStereo(...) for a stereo estimate, and AcousticApi.estimateAirflow(...) for airflow. For PCM streaming, reuse the same UUID for every consecutive chunk passed to AcousticApi.processStream(...) and call AcousticApi.closeStream(...) when the stream ends.
+
+The original Beautiful Decor source stays untouched. Its maintainers can later add a small adapter that calls this API where it owns sound-source positions or decoded stream data.
+
+## Build and verification
+
+Requirements: JDK 17 and Gradle 8.1+.
+
+    gradle --no-daemon clean build
+
+The GitHub Actions workflow builds on pushes, pull requests and manual dispatch. It runs the Gradle build task (including tests) and uploads the source plus compiled JAR artifact. It does not publish a GitHub Release.

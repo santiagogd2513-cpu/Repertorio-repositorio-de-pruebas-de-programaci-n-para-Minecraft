@@ -2,9 +2,13 @@ package com.bdacoustic.sound;
 
 import com.bdacoustic.config.AcousticConfig;
 import com.bdacoustic.physics.AcousticEngine;
+import com.bdacoustic.physics.AcousticEnvironment;
+import com.bdacoustic.physics.AcousticMotionTracker;
 import com.bdacoustic.physics.AcousticResult;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.client.resources.sounds.TickableSoundInstance;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.sound.PlaySoundEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -12,33 +16,66 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.UUID;
+
 @Mod.EventBusSubscriber(modid = "bdacoustic", value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class ClientSoundHook {
     private static final Logger LOGGER = LogManager.getLogger("BDAcousticEngine");
+    private static final AcousticMotionTracker SOURCE_MOTION = new AcousticMotionTracker();
+    private static final AcousticResult NEUTRAL = new AcousticResult(0.0, 0.0, 1.0, 1.0,
+            20000.0, 1.0, 0, 0, false, 1.0, 1.0, 1.0, 0.0, 343.2);
     private ClientSoundHook() {}
 
     @SubscribeEvent
     public static void onPlaySound(PlaySoundEvent event) {
         if (!AcousticConfig.ENABLED.get()) return;
+        SoundInstance sound = event.getSound();
+        if (sound == null || sound instanceof AcousticSoundInstance || sound.isRelative()) return;
+        if (sound.getAttenuation() == SoundInstance.Attenuation.NONE) return;
+
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) return;
-        SoundInstance sound = event.getSound();
-        if (sound == null || sound.isRelative()) return;
-        double dx = sound.getX() - mc.player.getX();
-        double dy = sound.getY() - mc.player.getY();
-        double dz = sound.getZ() - mc.player.getZ();
-        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (distance > AcousticConfig.MAX_DISTANCE.get()) return;
-        AcousticResult result = AcousticEngine.evaluate(mc.level,
-                new net.minecraft.world.phys.Vec3(sound.getX(), sound.getY(), sound.getZ()),
-                mc.player.position(), 20.0, 50.0, 0.0, 0.0,
-                Math.max(4, (int) Math.round(AcousticConfig.MAX_RAYS.get() * AcousticConfig.QUALITY.get())));
-        // The vanilla SoundEngine still owns final mixing and playback. This hook exposes
-        // evaluated physics without replacing or double-processing the original sound.
-        if (LOGGER.isDebugEnabled()) LOGGER.debug("Sound {}: d={}m delay={}s gain={} cutoff={}Hz",
-                sound.getLocation(), String.format(java.util.Locale.ROOT, "%.2f", result.distance()),
-                String.format(java.util.Locale.ROOT, "%.3f", result.delaySeconds()),
-                String.format(java.util.Locale.ROOT, "%.3f", result.totalGain()),
-                Math.round(result.lowPassHz()));
+        UUID trackingId = sound instanceof TickableSoundInstance ? UUID.randomUUID() : null;
+        AcousticResult result = evaluate(mc, sound, trackingId);
+        boolean applyGain = AcousticConfig.APPLY_GAIN.get();
+        boolean applyDoppler = AcousticConfig.APPLY_DOPPLER.get();
+
+        if (sound instanceof TickableSoundInstance tickable) {
+            event.setSound(new AcousticTickableSoundInstance(tickable, result, applyGain, applyDoppler,
+                    () -> evaluate(mc, sound, trackingId)));
+        } else {
+            event.setSound(new AcousticSoundInstance(sound, result, applyGain, applyDoppler));
+        }
+
+        if (LOGGER.isDebugEnabled()) LOGGER.debug(
+                "Acoustic sound {}: distance={} delay={} gain={} cutoff={}Hz doppler={} blockedRays={}",
+                sound.getLocation(), format(result.distance()), format(result.delaySeconds()),
+                format(result.totalGain()), Math.round(result.lowPassHz()),
+                format(result.dopplerRatio()), result.blockedRays());
+    }
+
+    private static AcousticResult evaluate(Minecraft mc, SoundInstance sound, UUID trackingId) {
+        if (mc.level == null || mc.player == null) return NEUTRAL;
+        Vec3 source = new Vec3(sound.getX(), sound.getY(), sound.getZ());
+        Vec3 listener = mc.player.position();
+        Vec3 direction = listener.subtract(source);
+        double distance = direction.length();
+        if (distance > AcousticConfig.MAX_DISTANCE.get()) return NEUTRAL;
+
+        Vec3 sourceVelocity = trackingId == null ? Vec3.ZERO
+                : SOURCE_MOTION.update(trackingId, source, System.nanoTime());
+        Vec3 listenerVelocity = mc.player.getDeltaMovement().scale(20.0);
+        Vec3 directionUnit = distance < 1.0e-8 ? Vec3.ZERO : direction.scale(1.0 / distance);
+        double sourceRadialVelocity = sourceVelocity.dot(directionUnit);
+        double listenerRadialVelocity = -listenerVelocity.dot(directionUnit);
+
+        AcousticEnvironment environment = AcousticEnvironment.standard();
+        int rays = Math.max(4, (int) Math.round(AcousticConfig.MAX_RAYS.get() * AcousticConfig.QUALITY.get()));
+        return AcousticEngine.evaluate(mc.level, source, listener, environment,
+                sourceRadialVelocity, listenerRadialVelocity, rays);
+    }
+
+    private static String format(double value) {
+        return String.format(java.util.Locale.ROOT, "%.3f", value);
     }
 }
