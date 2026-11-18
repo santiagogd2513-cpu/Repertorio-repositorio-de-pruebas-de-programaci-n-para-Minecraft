@@ -9,10 +9,13 @@ import com.bdacoustic.physics.AerodynamicNoiseModel;
 import com.bdacoustic.physics.AtmosphericModel;
 import com.bdacoustic.physics.Hydroacoustics;
 import com.bdacoustic.physics.RoomAcoustics;
+import com.bdacoustic.physics.RoomResonanceModel;
 import com.bdacoustic.physics.SpatialAudioModel;
+import com.bdacoustic.physics.WaveInterferenceModel;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -46,6 +49,32 @@ class AcousticCoreTest {
         RoomAcoustics.Estimate estimate = RoomAcoustics.estimate(120, 180, 0.25);
         assertTrue(estimate.rt60Seconds() >= 0.05 && estimate.rt60Seconds() <= 12.0);
         assertTrue(Double.isFinite(estimate.equivalentAbsorptionArea()));
+    }
+
+    @Test void roomModesAreSortedAndBounded() {
+        List<RoomResonanceModel.Mode> modes = RoomResonanceModel.estimate(8, 6, 3, 343.2, 0.25, 24);
+        assertFalse(modes.isEmpty());
+        assertTrue(modes.size() <= 24);
+        for (int i = 1; i < modes.size(); i++) {
+            assertTrue(modes.get(i).frequencyHz() >= modes.get(i - 1).frequencyHz());
+        }
+        assertTrue(modes.get(0).frequencyHz() > 0.0);
+    }
+
+    @Test void waveInterferenceHasConstructiveAndDestructiveCases() {
+        double wavelength = 343.2 / 1000.0;
+        WaveInterferenceModel.Interference constructive =
+                WaveInterferenceModel.twoPath(5.0, 5.0 + wavelength, 1000.0, 343.2);
+        WaveInterferenceModel.Interference destructive =
+                WaveInterferenceModel.twoPath(5.0, 5.0 + wavelength * 0.5, 1000.0, 343.2);
+        assertTrue(constructive.amplitudeGain() > 0.99);
+        assertTrue(destructive.amplitudeGain() < 0.001);
+    }
+
+    @Test void diffractionDoesNotExceedUnity() {
+        assertTrue(WaveInterferenceModel.knifeEdgeGain(1.0) <= 1.0);
+        assertTrue(WaveInterferenceModel.knifeEdgeGain(1.0) > 0.0);
+        assertEquals(1.0, WaveInterferenceModel.knifeEdgeGain(-1.0), 1.0e-9);
     }
 
     @Test void hydroacousticBoundaryIsStronglyMismatched() {

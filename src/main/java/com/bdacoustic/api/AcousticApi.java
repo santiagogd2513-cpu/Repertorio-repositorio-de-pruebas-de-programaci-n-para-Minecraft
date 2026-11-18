@@ -8,11 +8,14 @@ import com.bdacoustic.physics.AcousticMotionTracker;
 import com.bdacoustic.physics.AcousticResult;
 import com.bdacoustic.physics.AerodynamicNoiseModel;
 import com.bdacoustic.physics.RoomAcoustics;
+import com.bdacoustic.physics.RoomResonanceModel;
 import com.bdacoustic.physics.SpatialAudioModel;
+import com.bdacoustic.physics.WaveInterferenceModel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 
 /** Stable integration entry points for Beautiful Decor and third-party audio mods. */
@@ -21,7 +24,6 @@ public final class AcousticApi {
     private static final AcousticMotionTracker MOTION_TRACKER = new AcousticMotionTracker();
     private AcousticApi() {}
 
-    /** Backwards-compatible helper for stationary listeners. */
     public static AcousticResult evaluate(Level level, AcousticSource source, Vec3 listener, int rayBudget) {
         return evaluate(level, source, listener, 0.0, rayBudget);
     }
@@ -48,6 +50,21 @@ public final class AcousticApi {
                 room.roomMeanAbsorption());
     }
 
+    public static List<RoomResonanceModel.Mode> estimateRoomModes(double lengthMetres, double widthMetres,
+            double heightMetres, double soundSpeed, double meanAbsorption, int maximumModes) {
+        return RoomResonanceModel.estimate(lengthMetres, widthMetres, heightMetres,
+                soundSpeed, meanAbsorption, maximumModes);
+    }
+
+    public static WaveInterferenceModel.Interference estimateTwoPathInterference(
+            double pathAMetres, double pathBMetres, double frequencyHz, double soundSpeed) {
+        return WaveInterferenceModel.twoPath(pathAMetres, pathBMetres, frequencyHz, soundSpeed);
+    }
+
+    public static double estimateKnifeEdgeDiffractionGain(double fresnelV) {
+        return WaveInterferenceModel.knifeEdgeGain(fresnelV);
+    }
+
     public static SpatialAudioModel.StereoGains estimateStereo(Vec3 source, Vec3 listener, Vec3 listenerForward) {
         return SpatialAudioModel.estimate(source, listener, listenerForward);
     }
@@ -58,7 +75,6 @@ public final class AcousticApi {
                 shapeFactor, turbulenceFactor);
     }
 
-    /** Estimate source velocity from consecutive positions. Call on the game/client thread with nanoTime timestamps. */
     public static Vec3 updateTrackedSourceVelocity(String sourceId, Vec3 position, long timestampNanos) {
         if (sourceId == null || sourceId.isBlank()) return Vec3.ZERO;
         UUID id = UUID.nameUUIDFromBytes(sourceId.getBytes(StandardCharsets.UTF_8));
