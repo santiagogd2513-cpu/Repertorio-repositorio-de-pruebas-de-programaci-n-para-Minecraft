@@ -18,7 +18,7 @@ public final class AcousticMotionTracker {
     private record Sample(Vec3 position, long timestampNanos) {}
 
     public synchronized Vec3 update(UUID sourceId, Vec3 position, long timestampNanos) {
-        if (sourceId == null || position == null) return Vec3.ZERO;
+        if (sourceId == null || !isFinite(position)) return Vec3.ZERO;
         Sample previous = samples.put(sourceId, new Sample(position, timestampNanos));
         if (previous == null) return Vec3.ZERO;
         long elapsed = timestampNanos - previous.timestampNanos();
@@ -26,9 +26,12 @@ public final class AcousticMotionTracker {
         double seconds = elapsed / 1_000_000_000.0;
         if (seconds < 0.001 || seconds > 5.0) return Vec3.ZERO;
         Vec3 velocity = position.subtract(previous.position()).scale(1.0 / seconds);
-        if (!Double.isFinite(velocity.x) || !Double.isFinite(velocity.y) || !Double.isFinite(velocity.z)
-                || velocity.length() > MAX_REASONABLE_SPEED) return Vec3.ZERO;
+        if (!isFinite(velocity) || velocity.length() > MAX_REASONABLE_SPEED) return Vec3.ZERO;
         return velocity;
+    }
+
+    private static boolean isFinite(Vec3 vector) {
+        return vector != null && Double.isFinite(vector.x) && Double.isFinite(vector.y) && Double.isFinite(vector.z);
     }
 
     public synchronized void forget(UUID sourceId) {
