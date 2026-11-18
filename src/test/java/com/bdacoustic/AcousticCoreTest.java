@@ -51,6 +51,13 @@ class AcousticCoreTest {
         assertTrue(Double.isFinite(estimate.equivalentAbsorptionArea()));
     }
 
+    @Test void roomEstimateSanitizesNonFiniteInputs() {
+        RoomAcoustics.Estimate estimate = RoomAcoustics.estimate(Double.NaN, Double.POSITIVE_INFINITY, Double.NaN);
+        assertTrue(Double.isFinite(estimate.volumeCubicMetres()));
+        assertTrue(Double.isFinite(estimate.equivalentAbsorptionArea()));
+        assertTrue(Double.isFinite(estimate.rt60Seconds()));
+    }
+
     @Test void roomModesAreSortedAndBounded() {
         List<RoomResonanceModel.Mode> modes = RoomResonanceModel.estimate(8, 6, 3, 343.2, 0.25, 24);
         assertFalse(modes.isEmpty());
@@ -118,6 +125,14 @@ class AcousticCoreTest {
         assertEquals(2.0, velocity.x, 1.0e-9);
         assertEquals(1, tracker.trackedSources());
         tracker.forget(id);
+        assertEquals(0, tracker.trackedSources());
+    }
+
+    @Test void motionTrackerRejectsNonFinitePositions() {
+        AcousticMotionTracker tracker = new AcousticMotionTracker();
+        UUID id = UUID.randomUUID();
+        Vec3 invalid = tracker.update(id, new Vec3(Double.NaN, 0, 0), 1_000_000_000L);
+        assertEquals(Vec3.ZERO, invalid);
         assertEquals(0, tracker.trackedSources());
     }
 
